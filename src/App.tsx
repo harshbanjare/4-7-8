@@ -33,9 +33,9 @@ type PhaseName = (typeof phases)[number]["name"];
 type AudioContextConstructor = typeof AudioContext;
 
 const scaleMap: Record<PhaseName, number> = {
-  Inhale: 1.38,
-  Hold: 1.38,
-  Exhale: 0.72,
+  Inhale: 1.45,
+  Hold: 1.45,
+  Exhale: 0.95,
 };
 
 const blobShapeMap: Record<PhaseName, string> = {
@@ -217,6 +217,25 @@ function BreathingApp() {
     }
   };
 
+  const toggleZenMode = async () => {
+    const nextZenMode = !zenMode;
+    setZenMode(nextZenMode);
+
+    try {
+      if (nextZenMode) {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.warn("Fullscreen toggle failed:", error);
+    }
+  };
+
   const currentPhase = phases[phaseIndex];
   const phaseProgress = 1 - timeLeft / currentPhase.duration;
   const totalSeconds =
@@ -230,7 +249,7 @@ function BreathingApp() {
     <main className="relative min-h-screen overflow-hidden bg-[#050506] text-white">
       <button
         type="button"
-        onClick={() => setZenMode(!zenMode)}
+        onClick={toggleZenMode}
         className={`fixed right-6 top-6 z-50 rounded-full p-2 transition-opacity duration-700 ${
           zenMode
             ? "opacity-30 hover:opacity-100"
@@ -339,11 +358,15 @@ function BreathingApp() {
 
             <div className="absolute text-center flex flex-col items-center">
               <div
-                className={`text-lg font-semibold transition-opacity duration-700 ${
-                  zenMode ? "opacity-0" : "opacity-100"
+                className={`max-w-[100px] text-[11px] font-extrabold uppercase leading-tight tracking-[0.15em] transition-opacity duration-700 ${
+                  zenMode ? "opacity-60" : "opacity-80"
                 }`}
               >
-                {currentPhase.name}
+                {currentPhase.name === "Inhale"
+                  ? "Breathe In"
+                  : currentPhase.name === "Exhale"
+                    ? "Breathe Out"
+                    : "Hold"}
               </div>
               <div
                 className={`mt-1 font-mono text-5xl leading-none transition-opacity duration-700 ${
