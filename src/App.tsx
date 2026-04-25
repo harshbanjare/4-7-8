@@ -30,10 +30,6 @@ const phases = [
 
 type PhaseName = (typeof phases)[number]["name"];
 type AudioContextConstructor = typeof AudioContext;
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
 
 const scaleMap: Record<PhaseName, number> = {
   Inhale: 1.38,
@@ -54,17 +50,8 @@ function BreathingApp() {
   const [cycleCount, setCycleCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
-  const [installPrompt, setInstallPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-
-  const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    Boolean(
-      (window.navigator as Navigator & { standalone?: boolean }).standalone,
-    );
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -75,20 +62,6 @@ function BreathingApp() {
           console.error("Service worker registration failed:", error);
         });
     }
-  }, []);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () =>
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt,
-      );
   }, []);
 
   const getAudioContext = useCallback(() => {
@@ -216,17 +189,6 @@ function BreathingApp() {
     setPhaseIndex(0);
     setTimeLeft(phases[0].duration);
     setCycleCount(0);
-  };
-
-  const installApp = async () => {
-    if (!installPrompt) {
-      setShowInstallHelp((visible) => !visible);
-      return;
-    }
-
-    await installPrompt.prompt();
-    await installPrompt.userChoice;
-    setInstallPrompt(null);
   };
 
   const currentPhase = phases[phaseIndex];
