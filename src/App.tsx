@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { Focus } from "lucide-react";
 
 const phases = [
   {
@@ -50,8 +51,11 @@ function BreathingApp() {
   const [cycleCount, setCycleCount] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const [zenMode, setZenMode] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lastTapRef = useRef<number>(0);
+  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -191,6 +195,28 @@ function BreathingApp() {
     setCycleCount(0);
   };
 
+  const handleBlobTap = async () => {
+    const ctx = getAudioContext();
+    if (ctx?.state === "suspended") {
+      await ctx.resume();
+    }
+
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
+      reset();
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+      tapTimeoutRef.current = setTimeout(() => {
+        if (isRunning) stop();
+        else setIsRunning(true);
+      }, DOUBLE_TAP_DELAY);
+    }
+  };
+
   const currentPhase = phases[phaseIndex];
   const phaseProgress = 1 - timeLeft / currentPhase.duration;
   const totalSeconds =
@@ -201,39 +227,65 @@ function BreathingApp() {
     (currentPhase.duration - timeLeft);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050506] text-white">
-      <div className="flex min-h-screen items-center justify-center  px-6 py-6">
+    <main className="relative min-h-screen overflow-hidden bg-[#050506] text-white">
+      <button
+        type="button"
+        onClick={() => setZenMode(!zenMode)}
+        className={`fixed right-6 top-6 z-50 rounded-full p-2 transition-opacity duration-700 ${
+          zenMode
+            ? "opacity-30 hover:opacity-100"
+            : "opacity-50 hover:opacity-100"
+        }`}
+        aria-label="Toggle Zen Mode"
+      >
+        <Focus className="h-5 w-5" />
+      </button>
+
+      <div className="flex min-h-screen items-center justify-center px-6 py-6">
         <section className="w-full max-w-[340px]">
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/40">
-                Sleep mode
-              </p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-normal">
-                4-7-8
-              </h1>
+          <div
+            className={`transition-opacity duration-700 ${
+              zenMode ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/40">
+                  Sleep mode
+                </p>
+                <h1 className="mt-1 text-3xl font-semibold tracking-normal">
+                  4-7-8
+                </h1>
+              </div>
+            </div>
+
+            <div className="mb-7 grid grid-cols-3 rounded-full bg-white/[0.07] p-1">
+              {phases.map((phase, index) => (
+                <div
+                  className={`rounded-full px-2 py-2 text-center text-xs transition ${
+                    index === phaseIndex
+                      ? "bg-white text-black shadow-sm"
+                      : "text-white/45"
+                  }`}
+                  key={phase.name}
+                >
+                  <span className="font-medium">{phase.name}</span>
+                  <span className="ml-1 font-mono opacity-60">
+                    {phase.duration}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="mb-7 grid grid-cols-3 rounded-full bg-white/[0.07] p-1">
-            {phases.map((phase, index) => (
-              <div
-                className={`rounded-full px-2 py-2 text-center text-xs transition ${
-                  index === phaseIndex
-                    ? "bg-white text-black shadow-sm"
-                    : "text-white/45"
-                }`}
-                key={phase.name}
-              >
-                <span className="font-medium">{phase.name}</span>
-                <span className="ml-1 font-mono opacity-60">
-                  {phase.duration}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="relative mb-3 flex min-h-52 items-center justify-center">
+          <div
+            className="relative mb-3 flex min-h-52 cursor-pointer items-center justify-center select-none"
+            onClick={handleBlobTap}
+            style={{
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
+            }}
+          >
             <motion.div
               animate={{ rotate: isRunning ? 360 : 0 }}
               className="absolute flex h-44 w-44 items-center justify-center"
@@ -285,95 +337,113 @@ function BreathingApp() {
               />
             </motion.div>
 
-            <div className="absolute text-center">
-              <div className="text-lg font-semibold">{currentPhase.name}</div>
-              <div className="mt-1 font-mono text-5xl leading-none">
+            <div className="absolute text-center flex flex-col items-center">
+              <div
+                className={`text-lg font-semibold transition-opacity duration-700 ${
+                  zenMode ? "opacity-0" : "opacity-100"
+                }`}
+              >
+                {currentPhase.name}
+              </div>
+              <div
+                className={`mt-1 font-mono text-5xl leading-none transition-opacity duration-700 ${
+                  zenMode ? "opacity-50" : "opacity-100"
+                }`}
+              >
                 {timeLeft}
               </div>
             </div>
           </div>
 
-          <p className="mb-4 text-center text-xs text-white/50">
-            {currentPhase.hint}
-          </p>
+          <div
+            className={`transition-opacity duration-700 ${
+              zenMode ? "pointer-events-none opacity-0" : "opacity-100"
+            }`}
+          >
+            <p className="mb-4 text-center text-xs text-white/50">
+              {currentPhase.hint}
+            </p>
 
-          <div className="mb-4">
-            <div className="mb-2 flex justify-between text-xs text-white/40">
-              <span>Next: {phases[(phaseIndex + 1) % phases.length].name}</span>
-              <span>{Math.round(phaseProgress * 100)}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-              <motion.div
-                key={phaseIndex}
-                animate={{ width: isRunning ? "0%" : "100%" }}
-                className={`h-full bg-gradient-to-r ${currentPhase.color}`}
-                initial={{ width: "100%" }}
-                transition={{
-                  duration: isRunning ? currentPhase.duration : 0,
-                  ease: "linear",
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="mb-5 flex items-center justify-between border-y border-white/10 py-3 text-sm">
-            <div>
-              <div className="text-white/40">Session</div>
-              <div className="mt-1 font-mono">
-                {Math.floor(totalSeconds / 60)}:
-                {String(totalSeconds % 60).padStart(2, "0")}
+            <div className="mb-4">
+              <div className="mb-2 flex justify-between text-xs text-white/40">
+                <span>
+                  Next: {phases[(phaseIndex + 1) % phases.length].name}
+                </span>
+                <span>{Math.round(phaseProgress * 100)}%</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <motion.div
+                  key={phaseIndex}
+                  animate={{ width: isRunning ? "0%" : "100%" }}
+                  className={`h-full bg-gradient-to-r ${currentPhase.color}`}
+                  initial={{ width: "100%" }}
+                  transition={{
+                    duration: isRunning ? currentPhase.duration : 0,
+                    ease: "linear",
+                  }}
+                />
               </div>
             </div>
-            <div className="flex rounded-full bg-white/[0.07] p-1">
+
+            <div className="mb-5 flex items-center justify-between border-y border-white/10 py-3 text-sm">
+              <div>
+                <div className="text-white/40">Session</div>
+                <div className="mt-1 font-mono">
+                  {Math.floor(totalSeconds / 60)}:
+                  {String(totalSeconds % 60).padStart(2, "0")}
+                </div>
+              </div>
+              <div className="flex rounded-full bg-white/[0.07] p-1">
+                <button
+                  aria-pressed={soundEnabled}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    soundEnabled ? "bg-white text-black" : "text-white/45"
+                  }`}
+                  onClick={() => setSoundEnabled((enabled) => !enabled)}
+                  type="button"
+                >
+                  Sound
+                </button>
+                <button
+                  aria-pressed={hapticsEnabled}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    hapticsEnabled ? "bg-white text-black" : "text-white/45"
+                  }`}
+                  onClick={() => setHapticsEnabled((enabled) => !enabled)}
+                  type="button"
+                >
+                  Haptics
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              {!isRunning ? (
+                <button
+                  className="min-h-12 rounded-2xl bg-white px-6 font-semibold text-black transition active:scale-[0.98]"
+                  onClick={start}
+                  type="button"
+                >
+                  Start
+                </button>
+              ) : (
+                <button
+                  className="min-h-12 rounded-2xl bg-yellow-300 px-6 font-semibold text-black transition active:scale-[0.98]"
+                  onClick={stop}
+                  type="button"
+                >
+                  Pause
+                </button>
+              )}
+
               <button
-                aria-pressed={soundEnabled}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  soundEnabled ? "bg-white text-black" : "text-white/45"
-                }`}
-                onClick={() => setSoundEnabled((enabled) => !enabled)}
+                className="min-h-12 rounded-2xl bg-white/10 px-4 font-semibold text-white transition active:scale-[0.98]"
+                onClick={reset}
                 type="button"
               >
-                Sound
-              </button>
-              <button
-                aria-pressed={hapticsEnabled}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  hapticsEnabled ? "bg-white text-black" : "text-white/45"
-                }`}
-                onClick={() => setHapticsEnabled((enabled) => !enabled)}
-                type="button"
-              >
-                Haptics
+                Reset
               </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            {!isRunning ? (
-              <button
-                className="min-h-12 rounded-2xl bg-white px-6 font-semibold text-black transition active:scale-[0.98]"
-                onClick={start}
-                type="button"
-              >
-                Start
-              </button>
-            ) : (
-              <button
-                className="min-h-12 rounded-2xl bg-yellow-300 px-6 font-semibold text-black transition active:scale-[0.98]"
-                onClick={stop}
-                type="button"
-              >
-                Pause
-              </button>
-            )}
-
-            <button
-              className="min-h-12 rounded-2xl bg-white/10 px-4 font-semibold text-white transition active:scale-[0.98]"
-              onClick={reset}
-              type="button"
-            >
-              Reset
-            </button>
           </div>
         </section>
       </div>
